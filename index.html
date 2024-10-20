@@ -75,7 +75,7 @@
             transform: translateY(-2px);
         }
 
-        td input {
+        td input, td select {
             width: 100%;
             padding: 10px;
             border: 1px solid #ddd;
@@ -102,6 +102,14 @@
     <!-- File Upload for Excel -->
     <input type="file" id="fileInput" accept=".xlsx, .xls" />
 
+    <!-- Primary header selection -->
+    <div id="primarySelectionContainer" style="margin: 20px;">
+        <label for="primaryHeaderSelect">Select Primary Header: </label>
+        <select id="primaryHeaderSelect">
+            <!-- Options will be added dynamically -->
+        </select>
+    </div>
+
     <!-- Table for displaying the data -->
     <table id="userTable">
         <thead>
@@ -115,6 +123,7 @@
     <div class="column-container">
         <button id="addRowBtn">Add New Row</button>
         <button id="submitDataBtn">Submit New Data</button>
+        <button id="downloadExcelBtn">Download Excel</button>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -123,6 +132,7 @@
         let headers = [];
         let uploadedData = [];
         let newRowsData = [];
+        let primaryHeader = null;
 
         // Handle File Upload
         document.getElementById('fileInput').addEventListener('change', handleFileUpload);
@@ -141,13 +151,15 @@
                 headers = jsonData[0];
                 uploadedData = jsonData.slice(1);
 
-                // Display in table
+                // Display in table and enable primary selection
                 renderTable();
+                populatePrimaryHeaderSelection();
             };
 
             reader.readAsArrayBuffer(file);
         }
 
+        // Render table with uploaded data
         function renderTable() {
             const tableHeaders = document.getElementById('tableHeaders');
             const tableBody = document.getElementById('tableBody');
@@ -179,13 +191,43 @@
                 const tr = document.createElement('tr');
                 headers.forEach((header, index) => {
                     const td = document.createElement('td');
-                    const input = document.createElement('input');
-                    input.type = 'text';
-                    input.value = row[index] || '';
-                    td.appendChild(input);
+                    if (header === primaryHeader) {
+                        // Create a dropdown for the primary header
+                        const select = document.createElement('select');
+                        const uniqueValues = [...new Set(uploadedData.map(d => d[index]))];
+                        uniqueValues.forEach(value => {
+                            const option = document.createElement('option');
+                            option.value = value;
+                            option.textContent = value;
+                            select.appendChild(option);
+                        });
+                        td.appendChild(select);
+                    } else {
+                        const input = document.createElement('input');
+                        input.type = 'text';
+                        input.value = row[index] || '';
+                        td.appendChild(input);
+                    }
                     tr.appendChild(td);
                 });
                 tableBody.appendChild(tr);
+            });
+        }
+
+        // Populate primary header selection dropdown
+        function populatePrimaryHeaderSelection() {
+            const primaryHeaderSelect = document.getElementById('primaryHeaderSelect');
+            primaryHeaderSelect.innerHTML = '';
+            headers.forEach(header => {
+                const option = document.createElement('option');
+                option.value = header;
+                option.textContent = header;
+                primaryHeaderSelect.appendChild(option);
+            });
+
+            primaryHeaderSelect.addEventListener('change', function () {
+                primaryHeader = this.value;
+                renderTable(); // Re-render table when primary header changes
             });
         }
 
@@ -205,13 +247,26 @@
 
             // Gather new rows data
             newRowsData = newRowElements.map(tr => {
-                return Array.from(tr.getElementsByTagName('input')).map(input => input.value);
+                return Array.from(tr.getElementsByTagName('td')).map(td => {
+                    const input = td.querySelector('input, select');
+                    return input ? input.value : '';
+                });
             });
 
             console.log('New Rows Data:', newRowsData);
 
             alert('New data has been submitted successfully! You can further process or store this data.');
         }
+
+        // Download the data as an Excel file
+        document.getElementById('downloadExcelBtn').addEventListener('click', function () {
+            const allData = [headers].concat(uploadedData).concat(newRowsData);
+            const worksheet = XLSX.utils.aoa_to_sheet(allData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+            XLSX.writeFile(workbook, "UpdatedData.xlsx");
+        });
+
     </script>
 
 </body>
